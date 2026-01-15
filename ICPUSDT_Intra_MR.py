@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[349]:
-
-
 import pandas as pd
 import numpy as np
 import json 
@@ -13,33 +7,12 @@ import sys
 import os
 from datetime import datetime
 
-
-# In[350]:
-
-
 # API-Daten als Variablen. 
 # Nachher über os.getenv(), vor allem für die Cloud
-
 # Über OS
 API_KEY = os.getenv("KUCOIN_API_KEY")
 API_SECRET = os.getenv("KUCOIN_API_SECRET")
 API_PASSPHRASE = os.getenv("KUCOIN_API_PASSPHRASE")
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
 
 # Codeblock, um die Daten aus MongoDB ins Skript zu importieren 
 # Connection zur Database und Cluster wird zudem hergestellt. 
@@ -59,13 +32,13 @@ cluster = "icp-testing"
 
 uri = "mongodb+srv://" + username + ":" + password + "@" + cluster + ".rpiyhke.mongodb.net/?appName=ICP-Testing"
 
-# Create a new client and connect to the server
+# Client herstellen und zum Server verbinden
 client = MongoClient(uri, server_api=ServerApi('1'))
 
-# Send a ping to confirm a successful connection
+# Ping, um Verbindung zu testen
 try:
     client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
+    print("Verbindung zu MongoDB erfolgreich.")
 except Exception as e:
     print(e)
     
@@ -93,28 +66,7 @@ master_df = pd.DataFrame.from_dict(dict_to_df, orient="index")
 collection.delete_many({})
 
 print("Master-DF erfolgreich importiert und alte Daten in DB gelöscht.")
-
-
-# In[369]:
-
-
 print(master_df.tail(10))
-
-
-# In[370]:
-
-
-# Für Datenbank MongoDB geht wohl nur .to_dict
-# Daten (DF) in MongoDB speichern.
-# Ein Document repräsentiert eine Reihe (bei Zeitreihen einen einzelnen Zeitpunkt)
-
-# Als Funktion, die nach Ende des Codeblock-Flows aufgerufen wird 
-
-# timeField = "timestamp" und metaField = "columns: timeField und metaField sind Ebenen, die in Mongo definiert werden
-# Werden benötigt, um die Daten korrekt zu inserieren
-
-# db = client["master_data_ts"] --> Anfangs definiert, wird hier nicht benötigt
-# collection = db["strategy_perf_live_ts_2"] --> Anfangs definiert, wird hier nicht benötigt
 
 def insert_df_in_db(df):
     
@@ -127,12 +79,10 @@ def insert_df_in_db(df):
     client.close()
 
 
-# In[371]:
-
-
-# Class to handle api requests 
+# Class für alle API requests (post, get und delete)
 # KuCoin Signer als neu erstelltes Objekt
 # Beinhaltet das header-handling sowie api_key etc.
+# Big thanks to KUCOIN to provide a nice solution. 
 
 import base64
 import hashlib
@@ -188,14 +138,8 @@ def process_headers(signer: KcSigner, body: bytes, raw_url: str, request: reques
     # Add headers to the request
     request.headers.update(headers)
 
-
-# In[372]:
-
-
 # Funktion zum Herunterladen der historischen Daten --> Nur Single-Point fetch --> Datum über utc.now oder time.now()
-# Funktion bezieht sich auf einzelne Abschnitte
-# ICPUSDTM
-# First Open --> 1620741600000
+
 def get_future_kc(symbol, start_date, end_date, timeframe):
 
     # Datums-Manipulation
@@ -251,34 +195,14 @@ kucoin_single_fetch = get_future_kc(symbol="ICPUSDTM", start_date=now, end_date=
 def df_concatenation(df_1, df_2):
     return pd.concat([df_1, df_2], axis = 0)
 
-
-# In[373]:
-
-
 # Master DF updaten mit aktuellsten Zeitpunkt 
 master_df_updated = df_concatenation(master_df, kucoin_single_fetch)
 print("Master-DF updated mit neuestem Datenpunkt.")
 print(master_df_updated.tail(10))
 
-
-# In[143]:
-
-
-
-
-
-# In[374]:
-
-
-# Berechnungen durchführen wie rolling mean (oder Abstand zum MA, vola-adjustiert), volatility & volatility-percentile 
+# Berechnungen durchführen (features etc. und resultierende Signalgenerierung)
 def calc_features(df):
     df["log_return"] = np.log(df["open"]).diff()
-    df["open_std"] = df["open"].rolling(12).std()
-    df["volatility"] = df["log_return"].rolling(24).std()
-    df["sma_12"] = df["open"].rolling(12).mean() 
-    df["vola_percentile"] = df["volatility"].rolling(24).quantile(q=0.7)
-    df["upper"] = df["sma_12"] + 2*df["open_std"]
-    df["lower"] = df["sma_12"] - 2*df["open_std"]
 
     # Nur Signale für Entrys. Exits sollen über eine Trailing Limit laufen, die beim MA sitzt
     
@@ -286,10 +210,10 @@ def calc_features(df):
         df["signal"] = 0
               
     
-    if (df["open"].iloc[-2] > df["lower"].iloc[-2]) and (df["open"].iloc[-1] < df["lower"].iloc[-1]) and (df["volatility"].iloc[-1] < df["vola_percentile"].iloc[-1]):
+    if (df["feat"].iloc[-2] > df["feat"].iloc[-2]) and (df["feat"].iloc[-1] < df["feat"].iloc[-1]) and (df[["feat"]].iloc[-1] < df[["feat"]].iloc[-1]):
         df["signal"].iloc[-1] = 1
                                                        
-    elif (df["open"].iloc[-2] < df["upper"].iloc[-2]) and (df["open"].iloc[-1] > df["upper"].iloc[-1]) and (df["volatility"].iloc[-1] < df["vola_percentile"].iloc[-1]):
+    elif (df[["feat"]].iloc[-2] < df[["feat"]].iloc[-2]) and (df[["feat"]].iloc[-1] > df[["feat"]].iloc[-1]) and (df[["feat"]].iloc[-1] < df[["feat"]].iloc[-1]):
         df["signal"].iloc[-1] = -1
                                                        
     else:
@@ -300,30 +224,10 @@ def calc_features(df):
 
     return df
 
-
-# In[210]:
-
-
-
-
-
-# In[375]:
-
-
 # Aufruf der calc_features Funktion
 master_df_updated = calc_features(master_df_updated)
 
 master_df_updated
-
-
-# In[274]:
-
-
-
-
-
-# In[376]:
-
 
 # Take Profit function --> Immer aufrufen, oder nachher nur immer pro Block? Erstmal hier lassen
 def place_take_profit(signer: KcSigner, session: requests.Session, client_oid, symbol, side, typ, price, quantity):
@@ -351,22 +255,6 @@ def place_take_profit(signer: KcSigner, session: requests.Session, client_oid, s
     resp_obj = json.loads(resp.content)
     print(resp_obj)
     return resp_obj
-
-
-# In[141]:
-
-
-
-
-
-# In[109]:
-
-
-
-
-
-# In[377]:
-
 
 # Funktion zum prüfen, ob die gesetzte Limit-Order auch gefillt wurde. Einsatz, nachdem place_order stattfand
 # Gilt für auch Stop-Loss bzw. TP-Orders
@@ -397,16 +285,6 @@ def check_for_fill(signer: KcSigner, session: requests.Session, oid):
     avg_price = resp_obj["data"]["avgDealPrice"]
 
     return is_active, status, filled_quantity, avg_price
-
-
-# In[ ]:
-
-
-
-
-
-# In[384]:
-
 
 # Wenn in_position ungleich null wahr ist (also 1 oder -1), dann sollte geprüft werden, ob die Position noch aktiv ist. 
 # Blockfolge für Positionsprüfung und Order-Platzierung startet ab hier 
@@ -535,34 +413,6 @@ else:
     master_df_updated["in_position"].iloc[-1] = 0 
     print("Keine offene Position aus der letzten Periode. Bot wird fortgesetzt")
 
-
-# In[308]:
-
-
-
-
-
-# In[307]:
-
-
-
-
-
-# In[136]:
-
-
-
-
-
-# In[138]:
-
-
-
-
-
-# In[278]:
-
-
 # Order-Funktion für long und short positionen 
 def place_order(signer: KcSigner, session: requests.Session, client_oid, symbol, side, typ, price, time_in_force, value):
     
@@ -591,22 +441,6 @@ def place_order(signer: KcSigner, session: requests.Session, client_oid, symbol,
     print(resp_obj)
     return resp_obj
 
-
-# In[131]:
-
-
-
-
-
-# In[132]:
-
-
-
-
-
-# In[279]:
-
-
 # Funktion zur extrahierung des aktuellen Mark-Prices. Letzter Preis aus dem neuesten Datenpunkt vermutlich
 # nicht machbar. Hierzu müsste die Geschwindigkeit angepasst werden
 
@@ -634,10 +468,6 @@ def get_mark_price(signer: KcSigner, session: requests.Session, symbol):
     mark_price= str(resp_obj["data"]["value"])
 
     return mark_price
-
-
-# In[280]:
-
 
 # Order-Logik, basierend auf dem neuestem Signal und ob eine Position zum Beginn der Periode vorhanden ist. 
 # Wenn die Order nach einer gewissen Zeit nicht gefillt wurde, soll diese storniert werden (cancel). --> IOC 
@@ -816,16 +646,3 @@ else:
 # "KILL-SWITCHES" EINBAUEN: WENN LIMIT NICHT GEFILLT, DF FILLEN UND SPEICHERN, DANN PROGRAMMABBRUCH
 
 # Ende des Bots. Ausführung durch einen Cron-Job oder cloud-scheduler, der alle 30-Minuten startet. 
-
-
-# In[285]:
-
-
-
-
-
-# In[284]:
-
-
-
-
