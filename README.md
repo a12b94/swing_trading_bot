@@ -16,9 +16,9 @@ The bot consists of the following steps:
 
 Since this repo is available for the public, one major component is deleted in the uploaded version. Because for safety (unintended use of third parties).
 
-###########################################################################################################
+#######################################################################################
 
 DON'T USE THIS BOT UNLESS YOU REALLY KNOW WHAT YOU ARE DOING!
 I WILL NOT BE RESPONSIBLE FOR UNINTENDED USE OF THIRD PARTIES!
 
-###########################################################################################################
+#######################################################################################
