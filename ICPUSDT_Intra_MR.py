@@ -471,8 +471,6 @@ def get_mark_price(signer: KcSigner, session: requests.Session, symbol):
 
 # Order-Logik, basierend auf dem neuestem Signal und ob eine Position zum Beginn der Periode vorhanden ist. 
 # Wenn die Order nach einer gewissen Zeit nicht gefillt wurde, soll diese storniert werden (cancel). --> IOC 
-# Durch np.where für die Signalgenerierung werden natürlich im aktuellen code alle Bereiche mit über oder unter ma signiert. 
-# Bei dieser Logik ist wahrscheinlich eine Anpassung relevant (nur den cross). 
 
 if master_df_updated["signal"].iloc[-1] != 0 and master_df_updated["in_position"].iloc[-1] == 0:
     
